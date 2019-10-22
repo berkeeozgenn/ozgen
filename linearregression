@@ -1,0 +1,37 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+import math
+
+#read the csv files
+
+dataset=pd.read_csv("C:/Users/user/Desktop/house_prices_all.csv") # "/" şekline getirdik.
+size=dataset["sqft_living"]
+price=dataset["price"]
+
+#print(size) #includes indexes we should use np.arrays
+#print(price)
+size=np.array(size).reshape(-1,1) #1 sütun olacak ona göre datayı satırlaştır.reshape(99,1) desek direk çevirebilirdi. (-1,2)= 2 sütun olacak ona göre satırlaştır
+price=np.array(price).reshape(-1,1)#indexlerden kurtulduk
+
+print(size)
+print(price)
+
+model=LinearRegression() #modeli belirledik.
+model.fit(x,y)
+
+regression_model_mse= mean_squared_error(y,model.predict(x)) #gerçek değer ve tahmin edilen değerler karşılaştırılıyor.
+print("MSE :" ,regression_model_mse)
+print("R value: ", model.score(x,y)) #modelin doğruluğuna bakıyoruz. 0.49 küçük bir değer model yanlış
+
+print("coef: ", model.coef_[0])
+print("intercept:  ", model.intercept_[0])
+
+plt.scatter(x,y, color="green")
+plt.plot(x, model.predict(x), color="black")
+print("bizim tahmin edeceğimiz değer 2100 için : ", model.predict([[2100]]))
+
+plt.show()
+    
