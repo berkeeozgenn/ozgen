@@ -1,0 +1,143 @@
+#The dataset comes from the UCI Machine Learning repository, and it is related to 
+#direct marketing campaigns (phone calls) of a Portuguese banking institution.
+#The classification goal is to predict whether the client will subscribe (1/0) to a term deposit (variable y). 
+import pandas as pd
+import numpy as np
+from sklearn import preprocessing
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+sns.set(style="whitegrid")
+
+
+data=pd.read_csv("banking.csv")
+data.dropna()
+print(data.shape)
+print(list(data.columns))
+print(data.head(6))
+print(data["education"].unique())   #fazla grupları çıkarttık. Bir grup yaptık hepsini
+data["education"]=np.where(data["education"] =="basic.9y", "Basic", data["education"])
+data["education"]=np.where(data["education"] =="basic.6y", "Basic", data["education"])
+data["education"]=np.where(data["education"] =="basic.4y", "Basic", data["education"])
+print(data["education"].unique())
+
+
+print(data["y"])
+sns.countplot(x="y", data=data) #kredi verilebilir sayısı ile kredi verilemez sayısını karşılaştırdık.
+plt.show()
+
+kredi_1=len(data[data["y"]==1])
+kredi_0=len(data[data["y"]==0])
+print(kredi_0)              #kredi verilemez kişi sayısı
+print(kredi_1)              #kredi verilebilir kişi sayısı
+print(kredi_1/(kredi_0+kredi_1)) #kredi alabilecek kişilerin oranı
+
+pd.crosstab(data.job, data.y).plot(kind="bar") #mesleğe göre kredibilitesini ayırdık. hangi meslekten olduğu para
+plt.ylabel("kredi verilebilirliği")             #yı verip veremeyeceği anlamında önemli.
+
+
+pd.crosstab(data.education, data.y).plot(kind="bar") #eğitimine göre baktık
+
+cat_vars=['job','marital','education','default','housing','loan','contact','month','day_of_week','poutcome']
+for var in cat_vars:
+    cat_list='var'+'_'+var
+    cat_list = pd.get_dummies(data[var], prefix=var)
+    data1=data.join(cat_list)
+    data=data1
+cat_vars=['job','marital','education','default','housing','loan','contact','month','day_of_week','poutcome']
+data_vars=data.columns.values.tolist()
+to_keep=[i for i in data_vars if i not in cat_vars] #cat_vars ta bulunmayan data_vars ta bulunanları yaz diyor.
+
+data_final=data[to_keep]
+print(data_final.columns.values)  #columnları istediğimiz gibi nümerik olarak ayarladık.
+
+#SMOTE application/ Dengesiz veri setini,(kimi sütunda diğerine göre daha fazla veri var kimisinde az) yeni veriler sentezleyerek 
+#dengelemeye çalışan araç.Verileri kpyalayarak değil, en yakın komşudan(k-neigbor) rondom veri sentezleyerek yapıyor.
+
+
+X = data_final.loc[:, data_final.columns != 'y']#y olmayan tüm sütunların değerlerini ver.sütun adlarını değil değerlerini
+y = data_final.loc[:, data_final.columns == 'y']#baştan sona kadar y sütunundaki tüm değerleri ver.Kredibilite sütunu
+from imblearn.over_sampling import SMOTE
+os = SMOTE(random_state=0)  #0.5 0.5 oranını vermesini sağlayan fonksiyon
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+columns = X_train.columns
+os_data_X,os_data_y=os.fit_sample(X_train, y_train)#OS için eğittiğimiz dataları bu değişkenlere oturttuk.
+os_data_X = pd.DataFrame(data=os_data_X,columns=columns ) #veri çerçevesi yapacağız, datamızı yazdık sonra sütunların ne olduğunu yazdık
+os_data_y= pd.DataFrame(data=os_data_y,columns=['y'])#tek sütun olduğu için özellikle column1 gibi bir değişkene atamadık.
+# we can Check the numbers of our data..chack etmek için dataframe oluşturduk. bakalım dengeli dağılım var mı?
+print("length of oversampled data is ",len(os_data_X))
+print("Number of no subscription in oversampled data",len(os_data_y[os_data_y['y']==0]))
+print("Number of subscription",len(os_data_y[os_data_y['y']==1]))
+print("Proportion of no subscription data in oversampled data is ",len(os_data_y[os_data_y['y']==0])/len(os_data_X))
+print("Proportion of subscription data in oversampled data is ",len(os_data_y[os_data_y['y']==1])/len(os_data_X))
+#Oranlar eşit dağıldı. Bu suni olarak bizim tarafımızdan oluşturuldu çünkü lojistik regresyon algoritmamız 1 ve 0 lara yeniden karar verecek.
+#Buradaki amaç dengeli bir veri seti oluşturmak için kredi alır ve alamaz değerlerini eşitlemek. Neden buna ihtiyaç duyduk bilmiyorum.
+#You may have noticed that I over-sampled only on the training data, because by oversampling only on the training data
+
+#Recursive Feature Elimination
+
+#bunun amacı hangi feature lerin modeli oluşturmada daha etkili olduğunu saptayıp kuracağımız lojistik regresyon modelini
+#bu özelliklere bağlı kılmaktır. Recursive yinileyen demektir. Özellikleri hepsi bir den aza doğru yineleterek hangisi daha iyi karar verecek bu algoritma.
+
+data_final_vars=data_final.columns.values.tolist() #sütun isimlerini değişkenlere atadık(_vars)
+y=['y'] #kredibşilite sütunu
+X=[i for i in data_final_vars if i not in y] #diğer sütunlar
+
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LogisticRegression
+
+logrec=LogisticRegression()
+selector=RFE(logrec,20)#logrec yapacağız ve 20 özellik seçeceğiz. biz tanımladık bu selector fonk u. RFE(estimator, number of select)
+
+selector=selector.fit(os_data_X,os_data_y.values.ravel())#os_data_x bir çerçeve ama ravel yapılmış y tek satırlı bir matris burda denen böyle yaptı anlamadım?
+print(selector.support_)
+print(selector.ranking_) #hangi özellikleri kullanacağımız sütunlar
+
+cols=['euribor3m', 'job_blue-collar', 'job_housemaid', 'marital_unknown', 'education_illiterate', 'month_apr', 'month_aug', 'month_dec', 'month_jul', 'month_jun', 'month_mar', 'month_may', 'month_nov', 'month_oct', 'poutcome_failure', "poutcome_success"] 
+X=os_data_X[cols]
+y=os_data_y['y']
+import statsmodels.api as sm  #p tablosundaki sonucuna baktık. 0.05ten küçükse var olarak kullandık
+logit_model=sm.Logit(y,X)
+result=logit_model.fit()
+print(result.summary2())
+
+
+#4 değer p tablosunda isteneni veremedi. çıkartıyoruz
+cols=['euribor3m', 'job_blue-collar', 'job_housemaid', 'marital_unknown', 'education_illiterate', 
+      'month_apr', 'month_aug', 'month_dec', 'month_jul', 'month_jun', 'month_mar', 
+      'month_may', 'month_nov', 'month_oct', "poutcome_failure", "poutcome_success"] 
+X=os_data_X[cols]
+y=os_data_y['y']
+logit_model=sm.Logit(y,X)
+result=logit_model.fit()
+print(result.summary2())  #p tablosu istediğimiz gibi
+
+#Logistic Regression Model Fitting
+
+
+
+from sklearn.linear_model import LogisticRegression
+from sklearn import metrics
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+
+#sonuç tahmini
+
+y_pred = logreg.predict(X_test)
+print('Accuracy of logistic regression classifier on test set: {:.3f}'.format(logreg.score(X_test, y_test)))
+
+
+#confusion matrix
+from sklearn.metrics import confusion_matrix
+confusion_matrix = confusion_matrix(y_test, y_pred)
+print(confusion_matrix)
+
+
+
+
+
+
